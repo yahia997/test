@@ -1,0 +1,47 @@
+name: Evaluate Phase 2
+
+on:
+  push:
+    tags:
+      - 'phase2-submission'
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run phase 2 tests
+        id: tests
+        run: |
+          pytest test_phase2.py -v 2>&1 | tee results.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Compute test file hash
+        id: hash
+        run: |
+          echo "checksum=$(sha256sum test_phase2.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Report to backend
+        run: |
+          curl -X POST https://49bd-41-69-196-34.ngrok-free.app/submissions/result \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"challenge_id\": \"hello-world\",
+              \"phase_id\": \"phase2\",
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"status\": \"${{ steps.tests.outputs.exit_code == '0' && 'passed' || 'failed' }}\",
+              \"test_file_hash\": \"${{ steps.hash.outputs.checksum }}\",
+              \"output\": \"$(cat results.txt | tr '\"' "'" | tr '\n' ' ')\"
+            }"

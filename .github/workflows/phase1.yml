@@ -1,6 +1,9 @@
-name: Evaluate Submission
+name: Evaluate Phase 1
 
-on: [push]
+on:
+  push:
+    tags:
+      - 'phase1-submission'
 
 jobs:
   evaluate:
@@ -18,12 +21,17 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
-      - name: Run tests
+      - name: Run phase 1 tests
         id: tests
         run: |
-          pytest test_solution.py -v 2>&1 | tee results.txt
+          pytest test_phase1.py -v 2>&1 | tee results.txt
           echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
         continue-on-error: true
+
+      - name: Compute test file hash
+        id: hash
+        run: |
+          echo "checksum=$(sha256sum test_phase1.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Report to backend
         run: |
@@ -31,7 +39,9 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{
               \"challenge_id\": \"hello-world\",
+              \"phase_id\": \"phase1\",
               \"commit_sha\": \"${{ github.sha }}\",
               \"status\": \"${{ steps.tests.outputs.exit_code == '0' && 'passed' || 'failed' }}\",
+              \"test_file_hash\": \"${{ steps.hash.outputs.checksum }}\",
               \"output\": \"$(cat results.txt | tr '\"' "'" | tr '\n' ' ')\"
             }"
